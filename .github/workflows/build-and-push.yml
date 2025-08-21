@@ -1,0 +1,144 @@
+name: Build and Push Binary
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04]
+        compiler: [gcc-13, clang-17]
+        include:
+          - os: ubuntu-latest
+            compiler: gcc-13
+            cc: gcc-13
+            cxx: g++-13
+          - os: ubuntu-latest
+            compiler: clang-17
+            cc: clang-17
+            cxx: clang++-17
+          - os: ubuntu-22.04
+            compiler: gcc-13
+            cc: gcc-13
+            cxx: g++-13
+          - os: ubuntu-22.04
+            compiler: clang-17
+            cc: clang-17
+            cxx: clang++-17
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up environment
+      run: |
+        echo "CC=${{ matrix.cc }}" >> $GITHUB_ENV
+        echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libcurl4-openssl-dev \
+          pkg-config \
+          ${{ matrix.cc }} \
+          ${{ matrix.cxx }}
+
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DCMAKE_CXX_STANDARD=26 \
+          -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+          -DCMAKE_CXX_EXTENSIONS=OFF
+
+    - name: Build
+      run: |
+        cd build
+        make -j$(nproc)
+
+    - name: Test binary
+      run: |
+        cd build
+        if [ -f bin/arch_post_install ]; then
+          echo "Binary built successfully"
+          file bin/arch_post_install
+          ldd bin/arch_post_install || echo "Static binary or ldd not available"
+        else
+          echo "Binary not found!"
+          exit 1
+        fi
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: arch_post_install-${{ matrix.os }}-${{ matrix.compiler }}
+        path: build/bin/arch_post_install
+        retention-days: 30
+
+  package-and-push:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create multi-platform image
+      run: |
+        # Create a simple Dockerfile for the binary
+        cat > Dockerfile << 'EOF'
+        FROM alpine:latest
+        RUN apk add --no-cache ncurses curl
+        COPY arch_post_install /usr/local/bin/
+        RUN chmod +x /usr/local/bin/arch_post_install
+        ENTRYPOINT ["/usr/local/bin/arch_post_install"]
+        EOF
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
