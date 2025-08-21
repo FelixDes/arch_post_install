@@ -1,0 +1,54 @@
+name: Build and Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Set up CMake
+      - name: Install CMake and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libcurl4-openssl-dev libncurses-dev
+
+      # Configure CMake
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release ..
+
+      # Build the project
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release
+
+      # Package the binary
+      - name: Package binary
+        run: |
+          mkdir -p artifacts
+          cp build/bin/arch_post_install artifacts/arch_post_install
+          tar -czvf arch_post_install.tar.gz -C artifacts arch_post_install
+
+      # Upload artifact to GitHub Packages
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v${{ github.run_number }} \
+            arch_post_install.tar.gz \
+            --title "Release v${{ github.run_number }}" \
+            --notes "Automated release from GitHub Actions" \
+            --repo ${{ github.repository }} \
+            --draft=false
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
