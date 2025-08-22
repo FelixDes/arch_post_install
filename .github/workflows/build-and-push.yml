@@ -2,70 +2,34 @@ name: Build and Push Binary
 
 on:
   push:
-    branches: [ main, master ]
-    tags: [ 'v*' ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
 
     steps:
-      # Checkout source
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install GCC 14 (for C++26 support)
-      - name: Install GCC 14
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 \
-                                   --slave /usr/bin/g++ g++ /usr/bin/g++-14
-          gcc --version
-          g++ --version
-
-      # Install CMake 3.31
-      - name: Install CMake 3.31
-        run: |
-          sudo apt-get update
-          sudo apt-get remove -y cmake || true
-          sudo apt-get install -y wget curl build-essential libcurl4-openssl-dev
-          wget https://github.com/Kitware/CMake/releases/download/v3.31.0/cmake-3.31.0-linux-x86_64.tar.gz
-          tar -xzf cmake-3.31.0-linux-x86_64.tar.gz
-          sudo mv cmake-3.31.0-linux-x86_64 /opt/cmake-3.31
-          echo "/opt/cmake-3.31/bin" >> $GITHUB_PATH
+          pacman -Sy --noconfirm base-devel cmake curl git github-cli
           cmake --version
-          curl --version
+          gh --version
 
-      # Configure & Build
       - name: Configure project
-        run: cmake -S . -B build -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_C_COMPILER=gcc-14
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Build project
         run: cmake --build build --config Release
 
-      # Package the binary
-      - name: Package binary
-        run: |
-          mkdir -p dist
-          cp build/bin/arch_post_install dist/
-          tar -czf arch_post_install.tar.gz -C dist arch_post_install
-
-      # Publish artifact to GitHub Packages (ghcr.io)
-      - name: Publish to GitHub Packages
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          PACKAGE_NAME=ghcr.io/${REPO_OWNER}/arch_post_install:latest
-          # Create a scratch container image with the binary
-          cat > Dockerfile <<'EOF'
-          FROM scratch
-          ADD arch_post_install.tar.gz /
-          CMD ["/arch_post_install"]
-          EOF
-          docker build -t $PACKAGE_NAME .
-          docker push $PACKAGE_NAME
+      # Upload the binary from /bin as artifact
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-binary
+          path: build/bin/*
