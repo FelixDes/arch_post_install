@@ -183,6 +183,25 @@ std::vector<MenuItem> parse_root(const YAML::Node &root) {
     return result;
 }
 
+std::vector<std::string> parse_after(const YAML::Node &root) {
+    std::vector<std::string> result;
+    if (!root || !root.IsMap()) {
+        return result;
+    }
+    if (auto commands = root["after"]["commands"]) {
+        if (commands.IsSequence()) {
+            for (const auto &cmd: commands) {
+                if (cmd && cmd.IsScalar()) {
+                    result.push_back(cmd.as<std::string>());
+                }
+            }
+        } else if (commands.IsScalar()) {
+            result.push_back(commands.as<std::string>());
+        }
+    }
+    return result;
+}
+
 // ----------- Navigation -----------
 
 struct MenuState {
@@ -377,6 +396,7 @@ int main(int argc, char **argv) {
 
 
     std::vector<MenuItem> menu = parse_root(root);
+    std::vector<std::string> after_commands = parse_after(root);
 
     initscr();
     noecho();
@@ -394,6 +414,7 @@ int main(int argc, char **argv) {
     // Collect results
     std::vector<std::string> commands;
     collect_actions(menu, commands);
+    commands.insert(commands.end(), after_commands.begin(), after_commands.end());
 
     // Handle write
     if (write_flag) {
