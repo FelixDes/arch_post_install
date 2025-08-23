@@ -43,9 +43,10 @@ sections:
       - vim
       - name: custom_setup
         enabled: true
-        commands:
-          - __MGR__ -S neovim # alias for `yay --noconfirm --answerdiff=None --answeredit=None`
-          - sudo systemctl enable sshd
+        commands: |
+          __MGR__ -S neovim # alias for `yay --noconfirm --answerdiff=None --answeredit=None`
+          sudo systemctl enable sshd
+          __NOTIFY__ "alert" "msg" # alias for `notify-send -i dialog-information -t 5000 -u critical`
   dev:
     items:
       - git

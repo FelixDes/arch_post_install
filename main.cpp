@@ -17,6 +17,10 @@ const std::string AUR_MANAGER = "yay --noconfirm --answerdiff=None --answeredit=
 const std::string AUR_MANAGER_ALIAS = "__MGR__";
 const std::regex AUR_MANAGER_ALIAS_REGEX = std::regex(AUR_MANAGER_ALIAS);
 
+const std::string NOTIFY_COMMAND = "notify-send -i dialog-information -t 5000 -u critical";
+const std::string NOTIFY_COMMAND_ALIAS = "__NOTIFY__";
+const std::regex NOTIFY_COMMAND_ALIAS_REGEX = std::regex(NOTIFY_COMMAND_ALIAS);
+
 // ----------- Actions -----------
 
 struct Action {
@@ -49,6 +53,7 @@ struct ShAction : Action {
         }
         if (!script.empty()) script.erase(script.size() - 4);
         script = std::regex_replace(script, AUR_MANAGER_ALIAS_REGEX, AUR_MANAGER);
+        script = std::regex_replace(script, NOTIFY_COMMAND_ALIAS_REGEX, NOTIFY_COMMAND);
         return script;
     }
 };
