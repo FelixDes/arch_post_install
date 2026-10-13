@@ -14,7 +14,7 @@ On a fresh system, as a regular user:
 ```bash
 curl -fsSL https://github.com/FelixDes/arch_post_install/releases/latest/download/arch_post_install -o /tmp/apo \
   && chmod +x /tmp/apo \
-  && /tmp/apo -run https://raw.githubusercontent.com/FelixDes/arch_post_install/master/configs/felix.yaml
+  && /tmp/apo -run https://raw.githubusercontent.com/FelixDes/arch_post_install/master/configs/default.yaml
 ```
 
 ## Install
@@ -76,7 +76,7 @@ Snippets run in a subshell each, so `cd` and variables don't leak between steps.
 - `mgr <pkg>...` — install packages with the configured helper
 - `notify <title> <text>` — desktop notification
 
-Unknown keys are errors, so typos don't get silently ignored. See [`configs/felix.yaml`](configs/felix.yaml) for a full example.
+Unknown keys are errors, so typos don't get silently ignored. See [`configs/default.yaml`](configs/default.yaml) for a full example.
 
 ## License
 

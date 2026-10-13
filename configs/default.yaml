@@ -1,4 +1,4 @@
-# Run: arch_post_install configs/felix.yaml
+# Run: arch_post_install configs/default.yaml
 #
 # Item forms:
 #   - pkg                         install package "pkg"
