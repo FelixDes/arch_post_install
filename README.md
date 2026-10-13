@@ -1,59 +1,83 @@
 # Arch Post-Install Tool
 
-A command-line utility for Arch-based Linux distributions to automate post-installation tasks. It provides an interactive ncurses-based menu to select and execute installation commands for packages using `yay` or custom shell scripts, configured via a YAML file.
+Pick what to install on a fresh Arch-based system from a YAML config, get a bash script.
 
-## Features
-- **Interactive Menu**: Navigate and select installation tasks using a terminal-based interface.
-- **YAML Configuration**: Define packages and custom shell commands in a structured YAML file, supporting local files or remote URLs.
-- **Flexible Actions**: Install AUR packages with `yay` or run custom shell commands.
-- **Script Generation**: Generate and optionally execute shell scripts from selected actions.
-- **Command-Line Options**: Supports options for specifying YAML input, executing scripts, and saving output to files.
+- Tree picker in the terminal: toggle single items or whole groups.
+- All packages go into one `yay -S --needed` call, then each item's snippet runs as its own step.
+- The script stops on the first error (`set -euo pipefail`) and bootstraps `yay`/`paru` if it is missing.
+- One static binary, no runtime dependencies.
 
-## Requirements
-- C++26 compiler
-- CMake 3.31+
-- Libraries: `libcurl`, `ncurses`, `yaml-cpp`, `cxxopts`
-- AUR helper: `yay`
+## Quick start
 
-## Building
+On a fresh system, as a regular user:
+
 ```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
+curl -fsSL https://github.com/FelixDes/arch_post_install/releases/latest/download/arch_post_install -o /tmp/apo \
+  && chmod +x /tmp/apo \
+  && /tmp/apo -run https://raw.githubusercontent.com/FelixDes/arch_post_install/master/configs/felix.yaml
 ```
 
-Binaries are placed in `build/bin`.
+## Install
+
+Download `arch_post_install` from [Releases](https://github.com/FelixDes/arch_post_install/releases), or build:
+
+```bash
+CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' .
+```
 
 ## Usage
+
 ```bash
-./build/bin/arch_post_install -f <yaml_file_or_url> [-e] [-w [output_file]]
+arch_post_install [flags] CONFIG
 ```
 
-- `-f, --file <file|url>`: Path or URL to the YAML configuration file.
-- `-e, --exec`: Execute the generated script.
-- `-w, --write [filename]`: Save the script to a file (default: auto-generated name).
-- `-h, --help`: Display help message.
+`CONFIG` is a file path, an `http(s)://` / `file://` URL, or `-` for stdin.
 
-## Example YAML
+| Flag | |
+|---|---|
+| *(none)* | print the script to stdout |
+| `-o FILE` | write the script to `FILE` |
+| `-run` | show the script, ask, then run it (with `-o`, the script is kept) |
+| `-y` | with `-run`: don't ask |
+| `-defaults` | skip the picker, take items as `enabled` in the config |
+
+Picker keys: `↑↓`/`jk` move, `space` toggle item or group, `a` toggle all, `→←`/`lh` open/close group, `enter` done, `q`/`esc` cancel.
+
+## Config
+
 ```yaml
-sections:
-  core:
+helper: yay            # yay (default), paru or pacman
+
+groups:
+  - name: Shell
     items:
-      - vim
-      - name: custom_setup
-        enabled: true
-        commands: |
-          __MGR__ -S neovim # alias for `yay --noconfirm --answerdiff=None --answeredit=None`
-          sudo systemctl enable sshd
-          __NOTIFY__ "alert" "msg" # alias for `notify-send -i dialog-information -t 5000 -u critical`
-  dev:
-    items:
-      - git
+      - zsh            # install package "zsh"
+      - name: oh-my-zsh
+        packages: [git, curl]
+        run: |         # runs after all packages are installed
+          RUNZSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    groups:            # groups nest
+      - name: Extras
+        items:
+          - name: alacritty
+            enabled: false   # unchecked by default
+            run: |
+              mgr alacritty
+              notify "Post-install" "alacritty installed"
+
+after: |               # runs last
+  fastfetch
 ```
 
-## Installation
-Binaries are available in the [GitHub Packages registry](https://github.com/FelixDes/arch_post_install/packages).
+An item is either a package name or a mapping with `name` and optional `enabled` (default `true`), `packages` and `run`. A mapping with neither `packages` nor `run` installs the package called `name`.
+
+Snippets run in a subshell each, so `cd` and variables don't leak between steps. They can call:
+
+- `mgr <pkg>...` — install packages with the configured helper
+- `notify <title> <text>` — desktop notification
+
+Unknown keys are errors, so typos don't get silently ignored. See [`configs/felix.yaml`](configs/felix.yaml) for a full example.
 
 ## License
-MIT License
+
+MIT

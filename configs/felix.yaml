@@ -1,0 +1,108 @@
+# Run: arch_post_install configs/felix.yaml
+#
+# Item forms:
+#   - pkg                         install package "pkg"
+#   - name: x                     install package "x"
+#     enabled: false              unchecked by default
+#   - name: x
+#     packages: [a, b]            install these instead of "x"
+#     run: |                      shell snippet, runs after all packages are in
+#       ...
+# Snippets can call `mgr <pkgs>` (package helper) and `notify <title> <text>`.
+
+helper: yay
+
+groups:
+  - name: Basic
+    groups:
+      - name: Zsh
+        items:
+          - zsh
+          - name: oh-my-zsh
+            packages: [zsh, curl, git]
+            run: |
+              [ -d ~/.oh-my-zsh ] || RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+              sudo chsh -s "$(command -v zsh)" "$USER"
+          - name: zsh-history-substring-search
+            packages: [git]
+            run: |
+              dir=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
+              [ -d "$dir" ] || git clone https://github.com/zsh-users/zsh-history-substring-search "$dir"
+              # plugins=() must be edited in place: it is read before oh-my-zsh.sh is sourced
+              grep -q 'zsh-history-substring-search' ~/.zshrc || sed -i 's/^plugins=(\(.*\))/plugins=(\1 zsh-history-substring-search)/' ~/.zshrc
+    items:
+      - fastfetch
+      - name: os-prober
+        packages: [os-prober]
+        run: |
+          grep -q '^GRUB_DISABLE_OS_PROBER=false' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROBER=false' | sudo tee -a /etc/default/grub
+          sudo grub-mkconfig -o /boot/grub/grub.cfg
+      - nvtop
+      - name: fonts
+        packages: [noto-fonts-emoji, unicode-emoji, nodejs-emojione]
+        run: fc-cache -f
+      - portproton
+      - name: alacritty
+        enabled: false
+        packages: [alacritty]
+        run: |
+          mkdir -p ~/.config/alacritty
+          cat >> ~/.config/alacritty/alacritty.toml <<'EOF'
+          [terminal.shell]
+          program = "/bin/zsh"
+          EOF
+          notify "Arch Post-install Tool" "Set alacritty as default terminal App: Setting > Default Application > Terminal emulator"
+          notify "Arch Post-install Tool" "Set shortcut for alacritty: Setting > Keyboard > Shortcuts - Unlink shortcuts for Konsole, add alacritty and map shortcuts to it"
+
+  - name: Build
+    items: [git, make, cmake, downgrade, autobuild, autoconf, pkgconf, base-devel]
+
+  - name: Internet
+    items:
+      - firefox
+      - google-chrome
+      - qbittorrent
+      - zoom
+      - discord
+      - vesktop
+      - ayugram-desktop-bin
+      - amnezia-bin
+
+  - name: Office
+    items:
+      - obsidian
+      - name: libreoffice-still-ru
+        enabled: false
+      - name: onlyoffice-bin
+        enabled: false
+
+  - name: Graphics
+    items:
+      - obs-studio
+      - name: openshot
+        enabled: false
+      - pinta
+
+  - name: Dev
+    items:
+      - npm
+      - jetbrains-toolbox
+      - name: cursor-bin
+        enabled: false
+      - name: visualvm
+        enabled: false
+      - name: docker
+        packages: [docker, docker-compose, docker-buildx]
+        run: |
+          sudo usermod -aG docker "$USER"
+          sudo systemctl enable --now docker.socket docker.service
+
+  - name: Ricing
+    items:
+      - name: ly
+        packages: [ly]
+        run: sudo systemctl enable ly.service
+
+after: |
+  fastfetch
+  xdg-open https://c.tenor.com/ZkUVtreetnAAAAAd/tenor.gif
